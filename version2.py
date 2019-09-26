@@ -30,7 +30,7 @@ classes = None
 with open(classesFile, 'rt') as f:
     classes = f.read().rstrip('\n').split('\n')
     modelConfiguration = "yolov2-voc.cfg"
-    modelWeights = "yolov2-voc.weights"
+    modelWeights = "yolov2-voc1.weights"
     net = cv.dnn.readNetFromDarknet(modelConfiguration, modelWeights)
     net.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
     net.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
@@ -44,6 +44,7 @@ def postprocess(frame, outs):
     classIds = []
     confidences = []
     boxes = []
+    results= []
     for out in outs:
         for detection in out:
             scores = detection[5:]
@@ -58,7 +59,7 @@ def postprocess(frame, outs):
                 confidences.append(float(confidence))
                 boxes.append([center_x,center_y,width,height])
                 if classId ==3:
-                    print([center_x,center_y],width,height,"船")
+                    results.append([[center_x,center_y],width,height,"boat"])
                 indices = cv.dnn.NMSBoxes(boxes, confidences, confThreshold, nmsThreshold)
                 for i in indices:
                     i = i[0]
@@ -67,16 +68,20 @@ def postprocess(frame, outs):
                     y = box[1]
                     width = box[2]
                     height = box[3]
+    return results
 
+if __name__ =="__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--image', help='Path to image file.')
+    args = parser.parse_args()
 
-imageopath = "/home/eric/lib_work/pyqt5/000241.jpg"
-# Open the image file
-if not os.path.isfile(imageopath):
-    print("Input image file ", imageopath, " doesn't exist")
-    sys.exit(1)
-cap = cv.imread(imageopath,1)
-outputFile = 'yolo_out_py.jpg'
-blob = cv.dnn.blobFromImage(cap, 1./255, (inpWidth, inpHeight))
-net.setInput(blob)
-outs = net.forward(getOutputsNames(net))
-postprocess(cap, outs)
+    if not os.path.isfile(args.image):
+        print("Input image file ", args.image, " doesn't exist")
+        sys.exit(1)
+    cap = cv.imread(args.image,1)
+    outputFile = 'yolo_out_py.jpg'
+    blob = cv.dnn.blobFromImage(cap, 1./255, (inpWidth, inpHeight))
+    net.setInput(blob)
+    outs = net.forward(getOutputsNames(net))
+results=postprocess(cap, outs)
+print(results)
