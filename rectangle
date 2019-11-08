@@ -1,3 +1,21 @@
+import cv2 as cv
+from cv2 import dnn
+ 
+net = dnn.readNetFromCaffe('./data/face_detector/deploy.prototxt', './data/face_detector/res10_300x300_ssd_iter_140000_fp16.caffemodel')
+ 
+ 
+inWidth = 300
+inHeight = 300
+confThreshold = 0.5
+ 
+frame = cv.imread('.\\image\\test.png')
+cols = frame.shape[1]
+rows = frame.shape[0]
+ 
+net.setInput(dnn.blobFromImage(frame, 1.0, (inWidth, inHeight), (104.0, 177.0, 123.0), False, False))
+detections = net.forward()
+# perf_stats = net.getPerfProfile()
+# print('Inference time, ms: %.2f' % (perf_stats[0] / cv.getTickFrequency() * 1000))
 for i in range(detections.shape[2]):
     confidence = detections[0, 0, i, 2]
     if confidence > confThreshold:
