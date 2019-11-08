@@ -1,0 +1,14 @@
+for i in range(detections.shape[2]):
+    confidence = detections[0, 0, i, 2]
+    if confidence > confThreshold:
+        xLeftBottom = int(detections[0, 0, i, 3] * cols)
+        yLeftBottom = int(detections[0, 0, i, 4] * rows)
+        xRightTop = int(detections[0, 0, i, 5] * cols)
+        yRightTop = int(detections[0, 0, i, 6] * rows)
+ 
+        cv.rectangle(frame, (xLeftBottom, yLeftBottom), (xRightTop, yRightTop), (0, 0, 255))
+ 
+cv.imshow("detections", frame)
+cv.waitKey(0)
+ 
+cv.destroyAllWindows()
