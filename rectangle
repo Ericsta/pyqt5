@@ -28,16 +28,15 @@ class junk:
         self.classes = None
         self.filename = filename
         self.saveimg = saveimg
-        cap = cv.imread(self.filename, 1)
+        self.cap = cv.imread(self.filename, 1)
 
-        blob = cv.dnn.blobFromImage(cap, 1. / 255, (self.inpWidth, self.inpHeight))
+        blob = cv.dnn.blobFromImage(self.cap, 1. / 255, (self.inpWidth, self.inpHeight))
 
-        junk_d = {'bananapeel': 'wet', 'walnut_kernel': 'wet', 'eggshell': 'wet', 'bone': 'dry', '': 'dry',
+        self.junk_d = {'bananapeel': 'wet', 'walnut_kernel': 'wet', 'eggshell': 'wet', 'bone': 'dry', '': 'dry',
              'water_bottle': 'rec', 'bottle': 'rec', 'plastic': 'rec', 'battery': 'poison', 'paint_bucket': 'poison'}
         with open(classesFile, 'rt') as f:
             self.classes = f.read().rstrip('\n').split('\n')
             # load cfg ang weight
-            print(self.classes)
         modelConfiguration = "yolov2-voc666.cfg"
         modelWeights = "yolov2-voc666_20000.weights"
         # create net
@@ -46,14 +45,14 @@ class junk:
         self.net.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
         self.net.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
         self.net.setInput(blob)
-
+       
+    def get_results(self):
         outs = self.net.forward(self.getOutputsNames(self.net))
-        results = self.postprocess(cap, outs, self.saveimg)
+        results = self.postprocess(self.cap, outs, self.saveimg)
         # wet dry rec poison
-        for i in results:
-            results[i].append(junk_d[results[-1]])
-        print(results)
-
+        for id,result in enumerate(results):
+            results[id].append(self.junk_d[result[-1]])
+        return results
     def getOutputsNames(self, net):
         layersNames = net.getLayerNames()
         return [layersNames[i[0] - 1] for i in net.getUnconnectedOutLayers()]
@@ -88,10 +87,9 @@ class junk:
                         y = box[1]
                         width = box[2]
                         height = box[3]
-
-        if flag:
-            self.draw_rectangle(results, frameWidth, frameHeight, frame, self.classes[classId])
-
+                    if flag:
+                        self.draw_rectangle(results, frameWidth, frameHeight, frame, self.classes[classId])
+        cv.imwrite("./result.jpg", frame, [int(cv.IMWRITE_PNG_COMPRESSION), 0])
         return results
 
     def draw_rectangle(self, detections, cols, rows, frame, classname):
@@ -100,13 +98,13 @@ class junk:
             y1 = int(detections[i][1] - (detections[i][3]) / 2)
             x2 = int(detections[i][0] + (detections[i][2]) / 2)
             y2 = int(detections[i][1] + (detections[i][3]) / 2)
-            font = cv.FONT_HERSHEY_SUPLEX
+            font = cv.FONT_HERSHEY_COMPLEX
             cv.rectangle(frame,
                          (x1, y1),
                          (x2, y2),
                          (0, 0, 255))
-            cv.putText(frame, classname, (x1, y1), font, 2, (0, 0, 255), 1)
-            cv.imwrite("./result_{}.jpg".format(i), frame, [int(cv.IMWRITE_PNG_COMPRESSION), 0])
+            cv.putText(frame, classname+"_"+self.junk_d[classname], (x1, y1), font, 1, (0, 0, 255), 1)
+       
         # cv.imshow("detections", frame)
         # cv.waitKey(0)
         # cv.destroyAllWindows()
@@ -121,3 +119,5 @@ if __name__ == "__main__":
         print("Input image file ", args.image, " doesn't exist")
         sys.exit(1)
     junk = junk(args.image, args.show)
+    results =  junk.get_results()
+    print(results)
