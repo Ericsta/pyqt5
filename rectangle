@@ -1,32 +1,123 @@
+# -*- coding: utf-8 -*-
+
+# Form implementation generated from reading ui file 'untitled.ui'
+#
+# Created by: PyQt5 UI code generator 5.13.0
+#
+# WARNING! All changes made in this file will be lost!
+
+
+import sys
+
 import cv2 as cv
-from cv2 import dnn
- 
-net = dnn.readNetFromCaffe('./data/face_detector/deploy.prototxt', './data/face_detector/res10_300x300_ssd_iter_140000_fp16.caffemodel')
- 
- 
-inWidth = 300
-inHeight = 300
-confThreshold = 0.5
- 
-frame = cv.imread('.\\image\\test.png')
-cols = frame.shape[1]
-rows = frame.shape[0]
- 
-net.setInput(dnn.blobFromImage(frame, 1.0, (inWidth, inHeight), (104.0, 177.0, 123.0), False, False))
-detections = net.forward()
-# perf_stats = net.getPerfProfile()
-# print('Inference time, ms: %.2f' % (perf_stats[0] / cv.getTickFrequency() * 1000))
-for i in range(detections.shape[2]):
-    confidence = detections[0, 0, i, 2]
-    if confidence > confThreshold:
-        xLeftBottom = int(detections[0, 0, i, 3] * cols)
-        yLeftBottom = int(detections[0, 0, i, 4] * rows)
-        xRightTop = int(detections[0, 0, i, 5] * cols)
-        yRightTop = int(detections[0, 0, i, 6] * rows)
- 
-        cv.rectangle(frame, (xLeftBottom, yLeftBottom), (xRightTop, yRightTop), (0, 0, 255))
- 
-cv.imshow("detections", frame)
-cv.waitKey(0)
- 
-cv.destroyAllWindows()
+import argparse
+import sys
+import numpy as np
+import os.path
+import time
+
+
+class junk:
+    def __init__(self, filename, saveimg):
+        self.confThreshold = 0.5  # Confidence threshold
+        self.nmsThreshold = 0.4  # Non-maximum suppression threshold
+        self.inpWidth = 416  # Width of network's input image
+        self.inpHeight = 416  # Height of network's input image
+        # Load names of classes
+        classesFile = "voc666.names"
+        self.classes = None
+        self.filename = filename
+        self.saveimg = saveimg
+        cap = cv.imread(self.filename, 1)
+
+        blob = cv.dnn.blobFromImage(cap, 1. / 255, (self.inpWidth, self.inpHeight))
+
+        junk_d = {'bananapeel': 'wet', 'walnut_kernel': 'wet', 'eggshell': 'wet', 'bone': 'dry', '': 'dry',
+             'water_bottle': 'rec', 'bottle': 'rec', 'plastic': 'rec', 'battery': 'poison', 'paint_bucket': 'poison'}
+        with open(classesFile, 'rt') as f:
+            self.classes = f.read().rstrip('\n').split('\n')
+            # load cfg ang weight
+            print(self.classes)
+        modelConfiguration = "yolov2-voc666.cfg"
+        modelWeights = "yolov2-voc666_20000.weights"
+        # create net
+
+        self.net = cv.dnn.readNetFromDarknet(modelConfiguration, modelWeights)
+        self.net.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
+        self.net.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
+        self.net.setInput(blob)
+
+        outs = self.net.forward(self.getOutputsNames(self.net))
+        results = self.postprocess(cap, outs, self.saveimg)
+        # wet dry rec poison
+        for i in results:
+            results[i].append(junk_d[results[-1]])
+        print(results)
+
+    def getOutputsNames(self, net):
+        layersNames = net.getLayerNames()
+        return [layersNames[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+
+    # Remove the bounding boxes with low confidence using non-maxima suppression
+    def postprocess(self, frame, outs, flag):
+        frameHeight = frame.shape[0]
+        frameWidth = frame.shape[1]
+        classIds = []
+        confidences = []
+        boxes = []
+        results = []
+        for out in outs:
+            for detection in out:
+                scores = detection[5:]
+                classId = np.argmax(scores)
+                confidence = scores[classId]
+                if confidence > self.confThreshold:
+                    center_x = int(detection[0] * frameWidth)
+                    center_y = int(detection[1] * frameHeight)
+                    width = int(detection[2] * frameWidth)
+                    height = int(detection[3] * frameHeight)
+                    classIds.append(classId)
+                    confidences.append(float(confidence))
+                    boxes.append([center_x, center_y, width, height])
+                    results.append([center_x, center_y, width, height, self.classes[classId]])
+                    indices = cv.dnn.NMSBoxes(boxes, confidences, self.confThreshold, self.nmsThreshold)
+                    for i in indices:
+                        i = i[0]
+                        box = boxes[i]
+                        x = box[0]
+                        y = box[1]
+                        width = box[2]
+                        height = box[3]
+
+        if flag:
+            self.draw_rectangle(results, frameWidth, frameHeight, frame, self.classes[classId])
+
+        return results
+
+    def draw_rectangle(self, detections, cols, rows, frame, classname):
+        for i in range(len(detections)):
+            x1 = int(detections[i][0] - (detections[i][2]) / 2)
+            y1 = int(detections[i][1] - (detections[i][3]) / 2)
+            x2 = int(detections[i][0] + (detections[i][2]) / 2)
+            y2 = int(detections[i][1] + (detections[i][3]) / 2)
+            font = cv.FONT_HERSHEY_SUPLEX
+            cv.rectangle(frame,
+                         (x1, y1),
+                         (x2, y2),
+                         (0, 0, 255))
+            cv.putText(frame, classname, (x1, y1), font, 2, (0, 0, 255), 1)
+            cv.imwrite("./result_{}.jpg".format(i), frame, [int(cv.IMWRITE_PNG_COMPRESSION), 0])
+        # cv.imshow("detections", frame)
+        # cv.waitKey(0)
+        # cv.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--image', help='Path to image file.')
+    parser.add_argument('--show', help='Path to image file.')
+    args = parser.parse_args()
+    if not os.path.isfile(args.image):
+        print("Input image file ", args.image, " doesn't exist")
+        sys.exit(1)
+    junk = junk(args.image, args.show)
